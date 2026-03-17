@@ -281,6 +281,149 @@ Style dos cards: bg `#1a2419`, border `0.5px solid #2a3a2a`, border-radius `8px`
 
 ## Lógica Principal — Scanner
 
+### Estratégia de Async — IMPORTANTE
+
+O scanner **deve ser 100% assíncrono**. Nunca usar versões síncronas (`readdirSync`, `statSync`) pois travam o processo principal e congelam o app inteiro.
+
+A implementação usa `fs/promises` (API nativa do Node.js) com **concorrência controlada por semáforo**. Processar arquivos um por um é lento demais; processar todos ao mesmo tempo sobrecarrega o sistema. O limite ideal é **50 operações simultâneas**.
+
+#### Implementação completa do `scanner.ts`
+
+```typescript
+import { promises as fs } from 'fs'
+import { join } from 'path'
+import { BrowserWindow } from 'electron'
+
+// Semáforo: limita operações simultâneas de fs
+class Semaphore {
+  private queue: (() => void)[] = []
+  private active = 0
+
+  constructor(private limit: number) {}
+
+  async acquire(): Promise<void> {
+    if (this.active < this.limit) {
+      this.active++
+      return
+    }
+    await new Promise<void>(resolve => this.queue.push(resolve))
+    this.active++
+  }
+
+  release(): void {
+    this.active--
+    const next = this.queue.shift()
+    if (next) next()
+  }
+}
+
+const sem = new Semaphore(50) // máximo 50 leituras simultâneas
+let cancelled = false
+let scannedCount = 0
+
+export async function scanDirectory(
+  dirPath: string,
+  win: BrowserWindow
+): Promise<FileNode> {
+  cancelled = false
+  scannedCount = 0
+  return await walk(dirPath, win)
+}
+
+export function cancelScan() {
+  cancelled = true
+}
+
+async function walk(filePath: string, win: BrowserWindow): Promise<FileNode> {
+  if (cancelled) throw new Error('CANCELLED')
+
+  await sem.acquire()
+  let stat: Awaited<ReturnType<typeof fs.stat>>
+
+  try {
+    stat = await fs.stat(filePath)
+  } catch {
+    // Arquivo sem permissão ou removido durante scan — ignora silenciosamente
+    sem.release()
+    return {
+      name: filePath.split('/').pop() ?? filePath,
+      path: filePath,
+      size: 0,
+      isDirectory: false,
+      lastAccessed: new Date(),
+      lastModified: new Date(),
+      category: 'other',
+    }
+  }
+  sem.release()
+
+  scannedCount++
+
+  // Envia progresso a cada 50 arquivos para não sobrecarregar o IPC
+  if (scannedCount % 50 === 0) {
+    win.webContents.send('scan:progress', {
+      scanned: scannedCount,
+      current: filePath,
+    })
+  }
+
+  if (!stat.isDirectory()) {
+    return {
+      name: filePath.split('/').pop() ?? filePath,
+      path: filePath,
+      size: stat.size,
+      isDirectory: false,
+      lastAccessed: stat.atime,
+      lastModified: stat.mtime,
+      category: detectCategory(filePath),
+    }
+  }
+
+  // É um diretório — lê os filhos
+  let entries: string[] = []
+  try {
+    entries = await fs.readdir(filePath)
+  } catch {
+    // Sem permissão para listar (ex: pastas do sistema) — retorna pasta vazia
+    return {
+      name: filePath.split('/').pop() ?? filePath,
+      path: filePath,
+      size: 0,
+      isDirectory: true,
+      lastAccessed: stat.atime,
+      lastModified: stat.mtime,
+      category: 'system',
+      children: [],
+    }
+  }
+
+  // Processa todos os filhos em paralelo (o semáforo controla a concorrência)
+  const children = await Promise.all(
+    entries.map(entry => walk(join(filePath, entry), win))
+  )
+
+  // Tamanho da pasta = soma recursiva de tudo dentro dela
+  const totalSize = children.reduce((sum, child) => sum + child.size, 0)
+
+  return {
+    name: filePath.split('/').pop() ?? filePath,
+    path: filePath,
+    size: totalSize,
+    isDirectory: true,
+    lastAccessed: stat.atime,
+    lastModified: stat.mtime,
+    category: detectSmartCategory(filePath, children),
+    children,
+  }
+}
+```
+
+**Por que `Promise.all` nos filhos?** Porque os filhos de uma pasta são independentes entre si — não há razão para esperar um terminar antes de começar o próximo. O `Promise.all` os processa em paralelo, e o semáforo garante que no máximo 50 chamadas de `fs.stat` aconteçam ao mesmo tempo no sistema operacional.
+
+**Por que ignorar erros silenciosamente?** Durante um scan real, centenas de arquivos podem falhar por falta de permissão (especialmente em `~/Library`). Se qualquer erro quebrasse o scan inteiro, o app nunca terminaria de escanear um Mac real.
+
+---
+
 ### IPC Channels
 
 ```typescript
@@ -402,23 +545,80 @@ const win = new BrowserWindow({
 })
 ```
 
-### Permissões macOS (`Info.plist` / `electron-builder.yml`)
-O app precisa de acesso a pastas protegidas. Configurar:
+### Permissões macOS — DETALHADO
+
+O macOS tem um sistema de permissões em camadas. O Electron em desenvolvimento (`bun run dev`) já tem acesso à maioria das pastas do usuário. Em produção (app distribuído), é necessário configurar entitlements.
+
+#### Em desenvolvimento (sem configuração extra necessária)
+O processo do Electron roda com as permissões do usuário atual. Isso significa acesso livre a:
+- `~/Documents`, `~/Downloads`, `~/Desktop`, `~/Movies`, `~/Music`, `~/Pictures`
+- `~/Library` (maioria das subpastas)
+- Qualquer pasta dentro do home do usuário
+
+Pastas que **vão falhar** mesmo em dev (o scanner deve ignorar silenciosamente):
+- `/System`, `/private/var`, `/usr` — protegidas pelo SIP (System Integrity Protection)
+- `~/Library/Keychains` — dados de senhas
+- Alguns itens dentro de `~/Library/Application Support` de apps sandboxed
+
+#### Em produção (`electron-builder`)
+
+Criar a pasta `build/` na raiz do projeto com os seguintes arquivos:
+
+**`build/entitlements.mac.plist`**:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Permite que o usuário selecione arquivos/pastas via dialog -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+
+  <!-- Acesso à pasta Downloads -->
+  <key>com.apple.security.files.downloads.read-write</key>
+  <true/>
+
+  <!-- Necessário para o Electron funcionar com hardened runtime -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+
+  <!-- Permite carregar código não assinado (necessário para o renderer do Electron) -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+</dict>
+</plist>
+```
+
+**`electron-builder.yml`**:
 ```yaml
-# electron-builder.yml
+appId: com.cloveranalyzer.app
+productName: Clover Analyzer
+directories:
+  buildResources: build
+  output: dist
+
 mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]   # Apple Silicon + Intel
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  title: Clover Analyzer
 ```
 
-```xml
-<!-- build/entitlements.mac.plist -->
-<key>com.apple.security.files.user-selected.read-write</key>
-<true/>
-<key>com.apple.security.files.downloads.read-write</key>
-<true/>
-```
+#### Pastas que requerem permissão explícita do usuário (Full Disk Access)
+
+Algumas pastas só ficam acessíveis se o usuário conceder **Full Disk Access** nas Preferências do Sistema:
+- `~/Library/Mail`
+- `~/Library/Messages`
+- `~/Library/Safari`
+- Backups do Time Machine
+
+**Estratégia recomendada:** Na primeira abertura do app, detectar se essas pastas estão acessíveis. Se não estiverem, mostrar um banner explicando como conceder Full Disk Access em Preferências do Sistema → Privacidade e Segurança → Acesso Total ao Disco. Nunca travar o app por isso — o scan funciona perfeitamente sem essas pastas.
 
 ---
 
@@ -460,7 +660,11 @@ mac:
 
 ## Observações Técnicas
 
-- **Bun + Electron:** Testar compatibilidade com módulos nativos (`fs`, `path`). O Bun pode ter limitações com alguns addons nativos do Node — documentar qualquer incompatibilidade encontrada.
-- **Performance do scan:** Para discos grandes, o scan pode ser lento. Implementar scan em chunks com `yield` ou workers, enviando progresso via IPC em tempo real para a UI atualizar conforme escaneia.
-- **Segurança:** Nunca expor `ipcRenderer` diretamente — sempre usar `contextBridge` no preload para criar uma API segura (`window.electronAPI`).
-- **Pastas protegidas no macOS:** `~/Library` e subpastas podem requerer permissão explícita do usuário via dialog de permissão do macOS na primeira execução.
+- **Async obrigatório:** Usar sempre `fs/promises` (import `{ promises as fs } from 'fs'`). Jamais usar `fs.readdirSync` ou `fs.statSync` — versões síncronas travam o Main Process inteiro e congelam a UI.
+- **Semáforo de concorrência:** O scanner usa um semáforo com limite de 50 para controlar quantas operações de `fs.stat` acontecem simultaneamente. Sem isso, o app tenta abrir centenas de milhares de file descriptors ao mesmo tempo e o macOS começa a retornar erros EMFILE ("too many open files").
+- **Erros silenciosos no scan:** Arquivos sem permissão de leitura são comuns no macOS. O scanner deve capturar todos os erros de `fs.stat` e `fs.readdir` com try/catch e retornar um nó com `size: 0` em vez de quebrar o scan inteiro.
+- **Frequência de progresso IPC:** Enviar `scan:progress` a cada 50 arquivos, não a cada 1. Enviar um evento IPC por arquivo significa potencialmente 500 mil eventos para um disco cheio — isso sozinho travaria o app.
+- **Tamanho de diretório:** `fs.stat` em uma pasta retorna o tamanho dos metadados da pasta (~4KB), não o conteúdo. O tamanho real de uma pasta é sempre calculado somando recursivamente o `size` de todos os filhos.
+- **Cancelamento:** A variável `cancelled` deve ser checada no início de cada chamada recursiva de `walk`. Sem isso, cancelar o scan não interrompe as Promise já em voo — o scan continua rodando em background mesmo depois do usuário pedir para parar.
+- **Bun + Electron:** O Bun atua como package manager e runner de scripts. O Main Process do Electron ainda roda sobre o runtime Node.js embutido no Electron — não o Bun. Portanto `fs`, `path` e outras APIs nativas do Node funcionam normalmente.
+- **Segurança:** Nunca expor `ipcRenderer` diretamente — sempre usar `contextBridge` no preload para criar uma API segura (`window.electronAPI`). O renderer não deve ter `nodeIntegration: true`.

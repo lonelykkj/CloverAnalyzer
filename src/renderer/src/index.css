@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400;1,500&family=Syne:wght@400..800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  :root {
+    --background: 144 6% 6%; /* #0d0f0e */
+    --foreground: 130 11% 92%; /* #e8ede9 */
+
+    --card: 130 17% 12%; /* #1a2419 */
+    --card-foreground: 130 11% 92%;
+
+    --popover: 144 6% 6%;
+    --popover-foreground: 130 11% 92%;
+
+    --primary: 121 44% 64%; /* #7dc97f */
+    --primary-foreground: 144 6% 6%;
+
+    --secondary: 124 15% 15%; /* #1a2419 */
+    --secondary-foreground: 130 11% 92%;
+
+    --muted: 125 14% 67%; /* #9eb89f */
+    --muted-foreground: 125 17% 35%; /* #4a6b4c */
+
+    --accent: 124 15% 15%;
+    --accent-foreground: 121 44% 64%;
+
+    --destructive: 18 50% 52%; /* #c0704a */
+    --destructive-foreground: 130 11% 92%;
+
+    --border: 126 8% 17%; /* #2a3028 */
+    --input: 126 8% 17%;
+    --ring: 121 44% 64%;
+
+    --radius: 0.5rem;
+
+    /* Custom Clover Colors */
+    --bg-root: #0d0f0e;
+    --bg-titlebar: #111412;
+    --bg-hover: #141a14;
+    --bg-selected: #1a2419;
+    --bg-card: #1a2419;
+    --bg-card-warn: #2a2010;
+
+    --border-main: #2a3028;
+    --border-card: #2a3a2a;
+
+    --text-primary: #e8ede9;
+    --text-muted: #9eb89f;
+    --text-subtle: #4a6b4c;
+
+    --green-bright: #7dc97f;
+    --green-mid: #4a9e5c;
+    --green-dark: #3d8a4e;
+    --green-deep: #2d6e3a;
+
+    --cat-video: #c0704a;
+    --cat-docs: #4a7ab8;
+    --cat-images: #8a4ab8;
+    --cat-audio: #b8944a;
+    --cat-other: #4a8a5a;
+  }
+
+  .dark {
+    /* Por padrão, o app é dark */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
