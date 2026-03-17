@@ -1,0 +1,35 @@
+{
+  "name": "clover-analyzer",
+  "version": "1.0.0",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/d3": "^7.4.3",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "electron-builder": "^26.8.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^4.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "d3": "^7.9.0",
+    "electron": "^41.0.2",
+    "electron-vite": "^5.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "vite": "^8.0.0",
+    "zustand": "^5.0.12"
+  }
+}
