@@ -1,34 +1,53 @@
-# dependencies (bun install)
+# Dependencies
 node_modules
+.bun
+bun.lockb
 
-# output
+# Build outputs
 out
 dist
+release
 *.tgz
 
-# code coverage
-coverage
-*.lcov
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
-
-# dotenv environment variable files
+# Environment variables
 .env
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 .env.local
 
-# caches
+# Caches
 .eslintcache
 .cache
+.vite
 *.tsbuildinfo
 
-# IntelliJ based IDEs
-.idea
-
-# Finder (MacOS) folder config
+# OS-specific files
 .DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# IDEs and Tools
+.idea
+.vscode
+*.sublime-project
+*.sublime-workspace
+.history
+
+# Project specific AI / Instruction files (Ignored)
+GEMINI.md
+GEMINI 2.md
+
+# Electron-specific
+build/
+coverage/
+node_modules/
+dist/
+dist_electron/
+*.stackdump
