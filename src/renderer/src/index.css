@@ -1,9 +1,7 @@
+@import "tailwindcss";
+@config "../../../tailwind.config.ts";
+
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400;1,500&family=Syne:wght@400..800&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 
 @layer base {
   :root {
@@ -62,10 +60,6 @@
     --cat-images: #8a4ab8;
     --cat-audio: #b8944a;
     --cat-other: #4a8a5a;
-  }
-
-  .dark {
-    /* Por padrão, o app é dark */
   }
 }
 
