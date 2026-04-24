@@ -41,7 +41,7 @@ Thumbs.db
 .history
 
 # Project specific AI / Instruction files (Ignored)
-GEMINI.md
+# GEMINI.md
 GEMINI 2.md
 
 # Electron-specific

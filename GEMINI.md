@@ -194,7 +194,6 @@ clover-analyzer/
 
 - Background: `#111412`
 - Border-bottom: `0.5px solid #2a3028`
-- Traffic lights macOS (dots) à esquerda: vermelho `#ff5f57`, amarelo `#febc2e`, verde `#28c840`
 - Logo Clover (SVG trevo 4 folhas) centralizado com o nome "Clover Analyzer"
 - Fonte do título: `Syne 13px 500`, cor `#7a9e7c`, letra-spacing `0.04em`
 - O app deve usar `frame: false` no Electron para titlebar customizada
