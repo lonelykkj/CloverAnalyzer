@@ -624,9 +624,9 @@ Algumas pastas só ficam acessíveis se o usuário conceder **Full Disk Access**
 ## Fases de Desenvolvimento
 
 ### Fase 1 — Fundação (MVP)
-- [ ] Configurar projeto (electron-vite + bun + TypeScript)
-- [ ] Instalar e configurar Tailwind, Shadcn, D3, Zustand
-- [ ] Implementar `scanner.ts` com scan recursivo
+- [x] Configurar projeto (electron-vite + bun + TypeScript)
+- [x] Instalar e configurar Tailwind, Shadcn, D3, Zustand
+- [x] Implementar `scanner.ts` com scan recursivo (Core Engine)
 - [ ] Criar IPC channels básicos
 - [ ] Interface mínima: sidebar + lista de arquivos ordenada por tamanho
 
